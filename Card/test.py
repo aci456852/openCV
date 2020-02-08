@@ -3,8 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-
-img = cv2.imread('tx.jpg')
+img = cv2.imread('coin.jpg')
 cv2.namedWindow("imshow",cv2.WINDOW_AUTOSIZE)
 cv2.imshow('imshow', img)
 
