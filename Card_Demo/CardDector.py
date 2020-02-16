@@ -2,26 +2,37 @@ import cv2
 import numpy as np
 import imutils
 
+# 二值化阈值
+BKG_THRESH = 60
 CARD_THRESH = 30
 
+# 根据摄像头距离改 是截取的
 CORNER_WIDTH = 32
 CORNER_HEIGHT = 84
 
+# 数字图片大小
 RANK_WIDTH = 70
 RANK_HEIGHT = 125
 
+# 花色图片大小
 SUIT_WIDTH = 70
 SUIT_HEIGHT = 100
 
+# 差分的最大值
 RANK_DIFF_MAX = 2000
 SUIT_DIFF_MAX = 700
+
+CARD_MAX_AREA = 120000
+CARD_MIN_AREA = 25000
+
+font = cv2.FONT_HERSHEY_SIMPLEX
 
 class Query_card:
     def __init__(self):
         self.contour = []                   # 轮廓
         self.width, self.height = 0, 0      # 宽度和高度
         self.corner_pts = []                # 多边形拟合后新的轮廓坐标
-        self.center = []                    # 中心点
+        self.center = []                    # 中心点  -没用到
         self.warp = []                      # 存放经过adjust_image函数处理得到的矩阵
         self.rank_img = []                  # 数字
         self.suit_img = []                  # 花色
@@ -29,6 +40,43 @@ class Query_card:
         self.best_suit_match = "Unknown"    # 花色匹配的最佳结果
         self.rank_diff = 0                  # 数字差距数值
         self.suit_diff = 0                  # 花色差距数值
+
+# 数字模版类
+class Train_ranks:
+    def __init__(self):
+        self.img = []
+        self.name = "Placeholder"
+
+# 加载数字模版图片
+def load_ranks(filepath):
+    train_ranks = []
+    i = 0
+    for Rank in ['Ace', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven','Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King']:
+        train_ranks.append(Train_ranks())
+        train_ranks[i].name = Rank
+        filename = Rank + '.jpg'
+        train_ranks[i].img = cv2.imread(filepath+filename, cv2.IMREAD_GRAYSCALE)
+        i = i + 1
+    return train_ranks
+
+
+# 花色模版类
+class Train_suits:
+    def __init__(self):
+        self.img = []
+        self.name = "Placeholder"
+
+# 加载花色模版图片
+def load_suits(filepath):
+    train_suits = []
+    i = 0
+    for Suit in ['Spades', 'Diamonds', 'Clubs', 'Hearts']:
+        train_suits.append(Train_suits())
+        train_suits[i].name = Suit
+        filename = Suit + '.jpg'
+        train_suits[i].img = cv2.imread(filepath+filename, cv2.IMREAD_GRAYSCALE)
+        i = i + 1
+    return train_suits
 
 #  [打开摄像头] 0 内置 1USB
 def video():
@@ -135,7 +183,7 @@ def adjust_card(image, pts, w, h):
     warp = cv2.cvtColor(warp, cv2.COLOR_BGR2GRAY)
     return warp
 
-#  [得到数字和花色] 多边形拟合->计算中心点
+#  [得到数字和花色] 多边形拟合->将新的矩形图像放大四倍->切割数字和花色
 def details_card(contour, image):
     qCard = Query_card()
     qCard.contour = contour
@@ -187,6 +235,42 @@ def details_card(contour, image):
 
     return qCard
 
+# [对比花色] 将得到的ROI区域和模版进行对比
+def match_card(qCard, train_ranks, train_suits):
+
+    best_rank_match_diff = 10000
+    best_suit_match_diff = 10000
+    best_rank_match_name = "Unknown"
+    best_suit_match_name = "Unknown"
+
+    best_rank_name = ''
+    best_suit_name = ''
+
+    if (len(qCard.rank_img) != 0) and (len(qCard.suit_img) != 0):
+
+        for Trank in train_ranks:
+                diff_img = cv2.absdiff(qCard.rank_img, Trank.img)  # 返回的结果是他们的差矩阵
+                rank_diff = int(np.sum(diff_img) / 255)  # 矩阵的全部值求和，然后标准化
+                if rank_diff < best_rank_match_diff:
+                    best_rank_match_diff = rank_diff
+                    best_rank_name = Trank.name
+
+        for Tsuit in train_suits:
+                diff_img = cv2.absdiff(qCard.suit_img, Tsuit.img)
+                suit_diff = int(np.sum(diff_img) / 255)
+                if suit_diff < best_suit_match_diff:
+                    best_suit_match_diff = suit_diff
+                    best_suit_name = Tsuit.name
+
+    if best_rank_match_diff < RANK_DIFF_MAX:
+        best_rank_match_name = best_rank_name
+
+    if best_suit_match_diff < SUIT_DIFF_MAX:
+        best_suit_match_name = best_suit_name
+
+    # 返回最佳匹配数数字和花色，及相应的差值
+    return best_rank_match_name, best_suit_match_name, best_rank_match_diff, best_suit_match_diff
+
 
 img = cv2.imread('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/example/test.jpg')
 # cv2.imshow('img', img)
@@ -197,6 +281,7 @@ thresh = preprocess_card(img)
 
 cnts_sort, cnt_is_card = find_card(thresh)
 
+'''
 # 红色描出图像外边框 绿色描出方形框
 for i, contour in enumerate(cnts_sort):
     area = cv2.contourArea(contour)
@@ -227,8 +312,32 @@ count = 0
 for flag in cnt_is_card:
     if flag == 1:
         out = details_card(cnts_sort[count], img)
-        cv2.imshow('rank_img %s' % count, out.rank_img)
-        cv2.imshow('suit_img %s' % count, out.suit_img)
+        # cv2.imshow('rank_img %s' % count, out.rank_img)
+        # cv2.imshow('suit_img %s' % count, out.suit_img)
         count += 1
+'''
+
+# 输出匹配结果并在原图上绘制结果
+train_ranks = load_ranks('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/images/')
+train_suits = load_suits('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/images/')
+count = 0
+for flag in cnt_is_card:
+    if flag == 1:
+        out = details_card(cnts_sort[count], img)
+        out.best_rank_match, out.best_suit_match, out.rank_diff, out.suit_diff = match_card(out, train_ranks,train_suits)
+        print(out.best_rank_match, out.best_suit_match, out.rank_diff, out.suit_diff)
+
+        x = out.center[0]
+        y = out.center[1]
+        # cv2.circle(img, (x, y), 5, (255, 0, 0), -1) 中心点
+
+        cv2.putText(img, (out.best_rank_match + ' of ' + out.best_suit_match), (x - 210, y), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
+
+        count += 1
+
+cv2.namedWindow("result img", 0)
+cv2.resizeWindow("result img", 700, 500)
+cv2.imshow('result img', img)
+
 
 cv2.waitKey(0)
