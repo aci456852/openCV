@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import imutils
+import time
 
 # 二值化阈值
 BKG_THRESH = 60
@@ -77,19 +78,6 @@ def load_suits(filepath):
         train_suits[i].img = cv2.imread(filepath+filename, cv2.IMREAD_GRAYSCALE)
         i = i + 1
     return train_suits
-
-#  [打开摄像头] 0 内置 1USB
-def video():
-    cap = cv2.VideoCapture(0)
-    while True:
-        ret, frame = cap.read()
-        frame = cv2.flip(frame, 1)  # 左右颠倒
-        if not ret:
-            break
-        frame = imutils.resize(frame, width=720)
-        cv2.imshow('', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):  # 按q退出
-            break
 
 
 #  [处理图片] 灰度化->高斯模糊->二值化
@@ -272,14 +260,14 @@ def match_card(qCard, train_ranks, train_suits):
     return best_rank_match_name, best_suit_match_name, best_rank_match_diff, best_suit_match_diff
 
 
+'''
+单张图测试 
 img = cv2.imread('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/example/test.jpg')
-# cv2.imshow('img', img)
-
+cv2.imshow('img', img)
 thresh = preprocess_card(img)
-# cv2.imshow('thresh', thresh)
-
-
+cv2.imshow('thresh', thresh)
 cnts_sort, cnt_is_card = find_card(thresh)
+'''
 
 '''
 # 红色描出图像外边框 绿色描出方形框
@@ -315,7 +303,6 @@ for flag in cnt_is_card:
         # cv2.imshow('rank_img %s' % count, out.rank_img)
         # cv2.imshow('suit_img %s' % count, out.suit_img)
         count += 1
-'''
 
 # 输出匹配结果并在原图上绘制结果
 train_ranks = load_ranks('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/images/')
@@ -339,5 +326,54 @@ cv2.namedWindow("result img", 0)
 cv2.resizeWindow("result img", 700, 500)
 cv2.imshow('result img', img)
 
+'''
 
-cv2.waitKey(0)
+
+train_ranks = load_ranks('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/images/')
+train_suits = load_suits('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/images/')
+frame_rate_calc = 1
+freq = cv2.getTickFrequency()
+
+cap = cv2.VideoCapture(0)
+time.sleep(1)
+
+cam_quit = 0
+
+while True:
+    ret, image = cap.read()
+    # image = cv2.flip(image, 1)  # 左右颠倒
+
+    if not ret:
+        break
+
+    t1 = cv2.getTickCount()
+    pre_proc = preprocess_card(image)
+    cnts_sort, cnt_is_card = find_card(pre_proc)
+
+    if len(cnts_sort) != 0:
+        cards = []
+        count = 0
+        for i in range(len(cnts_sort)):
+            if cnt_is_card[i] == 1:
+                cards.append(preprocess_card(cnts_sort[i], image))
+                cards[count].best_rank_match, cards[count].best_suit_match, cards[count].rank_diff, cards[count].suit_diff = match_card(cards[count], train_ranks, train_suits)
+                x = cards[count].center[0]
+                y = cards[count].center[1]
+                cv2.putText(image, (cards[count].best_rank_match + ' of ' + cards[count].best_suit_match), (x - 210, y),cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
+                count = count + 1
+
+        if len(cards) != 0:
+            temp_cnts = []
+            for i in range(len(cards)):
+                temp_cnts.append(cards[i].contour)
+            cv2.drawContours(image, temp_cnts, -1, (255, 0, 0), 2)
+
+    # cv2.putText(image, "FPS: " + str(int(frame_rate_calc)), (10, 26), font, 0.7, (255, 0, 255), 2, cv2.LINE_AA)
+    cv2.imshow("", image)
+
+    t2 = cv2.getTickCount()
+    time1 = (t2 - t1) / freq
+    frame_rate_calc = 1 / time1
+
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
