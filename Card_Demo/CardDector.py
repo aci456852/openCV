@@ -334,7 +334,7 @@ train_suits = load_suits('C:/Users/10846/PycharmProjects/Card_Demo/venv/Lib/imag
 frame_rate_calc = 1
 freq = cv2.getTickFrequency()
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1) #0为笔记本摄像头 1为USB外接摄像头
 time.sleep(1)
 
 cam_quit = 0
@@ -355,11 +355,11 @@ while True:
         count = 0
         for i in range(len(cnts_sort)):
             if cnt_is_card[i] == 1:
-                cards.append(preprocess_card(cnts_sort[i], image))
+                cards.append(details_card(cnts_sort[i], image))
                 cards[count].best_rank_match, cards[count].best_suit_match, cards[count].rank_diff, cards[count].suit_diff = match_card(cards[count], train_ranks, train_suits)
                 x = cards[count].center[0]
                 y = cards[count].center[1]
-                cv2.putText(image, (cards[count].best_rank_match + ' of ' + cards[count].best_suit_match), (x - 210, y),cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
+                cv2.putText(image, (cards[count].best_rank_match + ' . ' + cards[count].best_suit_match), (x - 100, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1)
                 count = count + 1
 
         if len(cards) != 0:
